@@ -17,4 +17,11 @@ def upload_document(file: UploadFile = File(...)):
         "message": "Document received successfully!"
     }
 
+def create_Chunks(doc, chunk_size):
+    chunks = []
+    i = 0
+    while i < len(doc):
+        chunk = doc[i:i+chunk_size]
 
+        chunk.append(chunks)
+    return chunks
