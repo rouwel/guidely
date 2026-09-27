@@ -17,3 +17,17 @@ guidely = "guidely:main"
 [build-system]
 requires = ["uv_build>=0.12.14,<0.13.0"]
 build-backend = "uv_build"
+
+[tool.ruff.lint]
+# B008 is a false positive for FastAPI: `File(...)`/`Depends(...)` in an argument
+# default is the framework's documented pattern.
+ignore = ["B008"]
+
+[dependency-groups]
+dev = [
+    "faiss-cpu>=1.15.1",
+    "fastapi>=0.141.1",
+    "python-multipart>=0.0.32",
+    "sentence-transformers>=6.1.0",
+    "uvicorn>=0.53.0",
+]
