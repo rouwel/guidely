@@ -1,9 +1,12 @@
 # FIX: import block re-sorted to satisfy ruff's isort rule (I001)
+import io
 import json
 from pathlib import Path
 
 import faiss
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from pypdf import PdfReader
+from pypdf.errors import PdfReadError
 from sentence_transformers import SentenceTransformer
 
 app = FastAPI()
@@ -68,6 +71,29 @@ def create_embeddings(document: str) -> int:
     return len(chunks)
 
 
+# FIX: PDFs are binary, so contents.decode("utf-8") could never work for them. Text
+# extraction lives here so upload_document stays a thin route, and so the empty-result
+# case (a scanned PDF with no text layer) gets its own message instead of looking like
+# an empty upload.
+def extract_text(filename: str, contents: bytes) -> str:
+    if filename.lower().endswith(".pdf"):
+        try:
+            reader = PdfReader(io.BytesIO(contents))
+            if reader.is_encrypted:
+                raise ValueError("This PDF is password protected")
+            text = "\n".join(page.extract_text() or "" for page in reader.pages).strip()
+        except PdfReadError as error:
+            raise ValueError("This PDF could not be read") from error
+
+        if not text:
+            raise ValueError(
+                "This PDF has no selectable text - it is probably a scan or an image"
+            )
+        return text
+
+    return contents.decode("utf-8")
+
+
 # FIX: this route was nested inside create_embeddings, after its `return`, so the
 # decorator never executed and POST /upload/documents was never registered. Dedented
 # to module level. (The 9-space `# Read uploaded bytes` comment is gone with it.)
@@ -75,19 +101,26 @@ def create_embeddings(document: str) -> int:
 async def upload_document(file: UploadFile = File(...)):
     # FIX: file.filename is Optional in FastAPI, so a client sending no filename
     # would raise AttributeError inside endswith() instead of getting a 400.
-    if not file.filename or not file.filename.endswith(".txt"):
-        raise HTTPException(status_code=400, detail="Only .txt files are supported")
+    # FIX: PDF is now accepted alongside txt, case-insensitively.
+    allowed = (".txt", ".pdf")
+    if not file.filename or not file.filename.lower().endswith(allowed):
+        raise HTTPException(
+            status_code=400, detail="Only .txt and .pdf files are supported"
+        )
 
-    # Raw upload stays `contents` (bytes); the decoded text is `document` (str).
+    # Raw upload stays `contents` (bytes); the extracted text is `document` (str).
     contents = await file.read()
 
     try:
-        document = contents.decode("utf-8")
+        document = extract_text(file.filename, contents)
     except UnicodeDecodeError:
         # FIX: `from None` hides the UnicodeDecodeError traceback from the response.
         raise HTTPException(
             status_code=400, detail="The file must be UTF-8 encoded text"
         ) from None
+    except ValueError as error:
+        # Unreadable, encrypted, or text-less PDF - reported as-is so the user knows why.
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
     try:
         number_of_chunks = create_embeddings(document)
