@@ -111,8 +111,11 @@ def search(question: str, top_k: int = 2):
         with open(CHUNKS_PATH, "r", encoding="utf-8") as chunks_file:
             # Same name as in create_embeddings, for the same payload.
             chunks = json.load(chunks_file)
-    except FileNotFoundError:
-        # FIX: `from None` stops FAISS/IO traceback chaining in the 404 response.
+    except (FileNotFoundError, RuntimeError):
+        # FIX: a missing index is a RuntimeError from the FAISS C++ layer, not a
+        # FileNotFoundError, so the old handler never fired and a missing index
+        # returned 500 instead of 404. Both are now treated as "nothing uploaded".
+        # `from None` stops the FAISS/IO traceback chaining into the response.
         raise HTTPException(
             status_code=404, detail="No document has been uploaded yet"
         ) from None
