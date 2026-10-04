@@ -1,11 +1,28 @@
 import { useState } from "react";
 
+// A response is not guaranteed to carry JSON. The Vite proxy answers 502 with an
+// empty body whenever the API is down or restarting, and response.json() throws
+// "unexpected end of data" on that. Read the text first and parse only if there
+// is something to parse.
+async function readJson(response) {
+  const text = await response.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    return {};
+  }
+}
+
 // FastAPI puts string errors in `detail`, but validation errors arrive as a list of
 // objects, so normalise both into something we can drop straight into the UI.
 function readError(payload, response) {
   const detail = payload?.detail;
   if (typeof detail === "string") return detail;
   if (Array.isArray(detail)) return detail.map((item) => item.msg).join("; ");
+  if (response.status === 502 || response.status === 503) {
+    return `The API is not responding (status ${response.status}). Is uvicorn running?`;
+  }
   return `Request failed with status ${response.status}`;
 }
 
@@ -29,7 +46,7 @@ export default function App() {
 
     try {
       const response = await fetch("/upload/documents", { method: "POST", body });
-      const payload = await response.json();
+      const payload = await readJson(response);
       if (!response.ok) throw new Error(readError(payload, response));
 
       setUpload({
@@ -51,7 +68,7 @@ export default function App() {
     const params = new URLSearchParams({ question, top_k: String(topK) });
     try {
       const response = await fetch(`/search?${params}`);
-      const payload = await response.json();
+      const payload = await readJson(response);
       if (!response.ok) throw new Error(readError(payload, response));
 
       setSearch({ state: "done", results: payload.results, error: "" });
