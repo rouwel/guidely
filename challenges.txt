@@ -1,0 +1,79 @@
+How to combat duplicate data. (CAS)
+cas
+
+
+Document 100MBs
+10 pages
+1 page
+
+100 "abc" > 1000
+
+query "Who is Marcus Aurelius?"
+
+
+ZONE01 CHALLENGE AUDIT - guidely
+==================================
+Audited: ~40% complete. The retrieval half works, the generation
+half does not exist yet.
+
+DONE
+----
+[x] convert documents to raw text (.txt and .pdf)
+[x] create embeddings (all-MiniLM-L6-v2)
+[x] store embeddings in a vector db (faiss, chunks.index)
+[x] embed the question
+[x] retrieve top-k chunks by similarity
+[x] upload endpoint
+[x] persist embeddings
+[x] retrieve embeddings for search
+[x] clean JSON + error handling (400/404/500 paths)
+
+PARTIAL
+-------
+[ ] chunk size: fixed at 100 CHARACTERS, spec wants 500-1000 TOKENS
+[ ] frontend: ranked snippets only, no answer panel, no source filenames
+[ ] no editing, deleting or re-indexing of content
+[ ] no empty-query guard (question="" returns junk)
+[ ] no model timeout handling
+[ ] repo structure is wrong for the spec
+[ ] readme has purpose + pipeline, no setup/dataset/metrics table
+[ ] indexing works but never skips unchanged files
+
+MISSING - BLOCKING
+------------------
+[ ] LLM ANSWER GENERATION (biggest gap, no openai call anywhere)
+[ ] return generated answer + sources (file name + snippet)
+[ ] store the source filename per chunk (chunks.json holds bare strings)
+[ ] repo structure: backend/main.py, backend/routes/documents.py,
+    backend/routes/search.py, backend/models/record.py,
+    backend/data/sample-docs/ with 5+ sample docs
+[ ] frontend/src/components/ and frontend/src/pages/ (one App.jsx now)
+[ ] 5+ sample documents
+[ ] .env for the api key
+[ ] readme rewrite: purpose, dataset, setup, pipeline, metrics table
+[ ] any tests at all
+
+MISSING - REQUIRED METRICS
+-------------------------
+[ ] latency logging + /metrics with median and p95
+[ ] embedding cache: skip unchanged files, count hits vs misses
+[ ] failure-handling log: empty query, missing key, corrupt file, no results
+[ ] retrieval@3 evaluation, 10-20 questions, target >= 80%
+[ ] answer reference coverage, target >= 90%
+[ ] source precision spot check, target >= 80%
+[ ] indexing throughput
+
+NICE TO HAVE
+------------
+[ ] admin page: list, delete, re-index documents
+[ ] /health and /metrics endpoints
+[ ] conversation history for follow-up questions
+[ ] tags or categories + filter in the ui
+[ ] authentication / roles (reader vs admin)
+[ ] export query logs to csv
+
+ALSO FIX
+--------
+[ ] __pycache__/main.cpython-312.pyc is tracked in git, remove it
+[ ] no .gitignore for chunks.index, chunks.json, .env, node_modules
+[ ] three branches overlap, master is behind the feature work, nothing pushed
