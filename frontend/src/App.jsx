@@ -70,7 +70,7 @@ export default function App() {
         <form onSubmit={handleUpload}>
           <input
             type="file"
-            accept=".txt"
+            accept=".txt,.pdf"
             onChange={(event) => setFile(event.target.files?.[0] ?? null)}
           />
           <button type="submit" disabled={!file || upload.state === "uploading"}>
