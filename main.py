@@ -1,15 +1,31 @@
 # FIX: import block re-sorted to satisfy ruff's isort rule (I001)
 import io
 import json
+import logging
 from pathlib import Path
 
 import faiss
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import JSONResponse
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 from sentence_transformers import SentenceTransformer
 
+logger = logging.getLogger(__name__)
+
 app = FastAPI()
+
+
+# FIX: any exception we did not anticipate used to return Starlette's plain-text
+# "Internal Server Error", which the frontend could only report as "Request failed with
+# status 500". Keep the traceback in the api log, but send a readable message instead.
+@app.exception_handler(Exception)
+async def unhandled_error(request, error):
+    logger.exception("unhandled error while handling %s", request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error - check the api log for the traceback"},
+    )
 
 # FIX: stays at module scope on purpose - create_embeddings and search both need it.
 # (It was previously local to create_embeddings, which made search raise NameError.)
@@ -61,12 +77,22 @@ def create_embeddings(document: str) -> int:
     # AttributeError: type object 'Index' has no attribute 'FlatL2'.
     faiss_index = faiss.IndexFlatL2(dimension)
     faiss_index.add(embeddings)
-    faiss.write_index(faiss_index, str(INDEX_PATH))
 
-    # FIX: file handle renamed from `file`, which shadowed the UploadFile parameter
-    # name used elsewhere in this module.
-    with open(CHUNKS_PATH, "w", encoding="utf-8") as chunks_file:
+    # FIX: both files used to be written straight to their final names. A crash between
+    # the two writes left an index with no chunks file, and a crash *during* the json
+    # write left half a file that json.load could never read again - both surfaced later
+    # as an opaque 500 from /search. Write to temporary files first, then swap them in,
+    # so the pair on disk is always the pair that was completely written.
+    # FIX: file handle renamed from `file`, which shadowed the UploadFile parameter name.
+    temp_index = INDEX_PATH.with_suffix(".index.tmp")
+    temp_chunks = CHUNKS_PATH.with_suffix(".json.tmp")
+
+    faiss.write_index(faiss_index, str(temp_index))
+    with open(temp_chunks, "w", encoding="utf-8") as chunks_file:
         json.dump(chunks, chunks_file, ensure_ascii=False, indent=2)
+
+    temp_index.replace(INDEX_PATH)
+    temp_chunks.replace(CHUNKS_PATH)
 
     return len(chunks)
 
@@ -152,6 +178,22 @@ def search(question: str, top_k: int = 2):
         raise HTTPException(
             status_code=404, detail="No document has been uploaded yet"
         ) from None
+    except json.JSONDecodeError as error:
+        # FIX: an unreadable chunks file used to escape as a bare 500. Say what is
+        # wrong and how to fix it, since the only remedy is a fresh upload.
+        raise HTTPException(
+            status_code=500,
+            detail="The stored chunks file is unreadable - upload the document again",
+        ) from error
+
+    # FIX: if the index holds more vectors than the chunks file has entries, the lookup
+    # below raised IndexError and surfaced as an opaque 500. Catch the mismatch here,
+    # where the message can tell the user to upload the document again.
+    if index.ntotal != len(chunks):
+        raise HTTPException(
+            status_code=500,
+            detail="The stored index and chunks do not match - upload the document again",
+        )
 
     question_embedding = model_im_using.encode([question]).astype("float32")
     distances, indices = index.search(question_embedding, k=top_k)
