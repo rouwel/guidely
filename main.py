@@ -53,7 +53,10 @@ def create_embeddings(document: str) -> int:
     embeddings = model_im_using.encode(chunks).astype("float32")
 
     dimension = embeddings.shape[1]
-    faiss_index = faiss.Index.FlatL2(dimension)
+    # FIX: faiss.Index.FlatL2 does not exist in faiss-cpu 1.15 - the index classes were
+    # flattened out of the `Index` namespace, so every upload died with
+    # AttributeError: type object 'Index' has no attribute 'FlatL2'.
+    faiss_index = faiss.IndexFlatL2(dimension)
     faiss_index.add(embeddings)
     faiss.write_index(faiss_index, str(INDEX_PATH))
 
