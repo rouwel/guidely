@@ -124,3 +124,27 @@ button:disabled {
   font-size: 0.75rem;
   color: #8b8f96;
 }
+
+.answer {
+  margin: 0 0 1.2rem;
+  padding: 0.8rem 0.9rem;
+  background: #16241c;
+  border-left: 3px solid #34d399;
+  border-radius: 0 6px 6px 0;
+}
+
+.results h3 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8b8f96;
+  margin: 0 0 0.5rem;
+}
+
+.filename {
+  display: inline-block;
+  margin-bottom: 0.25rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #60a5fa;
+}

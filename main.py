@@ -5,13 +5,14 @@ import logging
 from pathlib import Path
 
 import faiss
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse
+from openai import APITimeoutError
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 from sentence_transformers import SentenceTransformer
 
-from rag import as_record, build_chunks
+from rag import answer_question, as_record, build_chunks
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +160,7 @@ async def upload_document(file: UploadFile = File(...)):
 # HTTP and `question` had no way to arrive. It is now a route with a query param.
 # FIX: faiss returns (distances, indices) - `positions` was a misleading name.
 @app.get("/search")
-def search(question: str, top_k: int = 2):
+def search(question: str = Query(..., min_length=1), top_k: int = Query(2, ge=1, le=20)):
     try:
         index = faiss.read_index(str(INDEX_PATH))
         with open(CHUNKS_PATH, "r", encoding="utf-8") as chunks_file:
@@ -199,12 +200,19 @@ def search(question: str, top_k: int = 2):
         if index_position == -1:
             continue
 
-        results.append(
-            {
-                "file": chunks[index_position]["file"],
-                "chunk": chunks[index_position]["text"],
-                "distance": float(distance),
-            }
-        )
+        record = chunks[index_position]
+        results.append({**record, "distance": float(distance)})
 
-    return {"question": question, "results": results}
+    # Retrieval alone is not the deliverable: the retrieved chunks go to the model,
+    # which writes the answer the UI shows above the sources it used.
+    try:
+        answered = answer_question(question, results)
+    except ValueError as error:
+        # No API key configured - a setup problem, not a bad request.
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except APITimeoutError as error:
+        raise HTTPException(
+            status_code=504, detail="The language model timed out, try again"
+        ) from error
+
+    return {"question": question, "answer": answered["answer"], "sources": answered["sources"]}

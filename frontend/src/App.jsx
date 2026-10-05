@@ -35,14 +35,14 @@ export default function App() {
 
   const [question, setQuestion] = useState("");
   const [topK, setTopK] = useState(3);
-  const [search, setSearch] = useState({ state: "idle", results: [], error: "" });
+  const [search, setSearch] = useState({ state: "idle", answer: "", sources: [], error: "" });
 
   async function handleUpload(event) {
     event.preventDefault();
     if (!file) return;
 
     setUpload({ state: "uploading", message: "", chunks: null });
-    setSearch({ state: "idle", results: [], error: "" });
+    setSearch({ state: "idle", answer: "", sources: [], error: "" });
 
     const body = new FormData();
     body.append("file", file);
@@ -66,7 +66,7 @@ export default function App() {
     event.preventDefault();
     if (!question.trim()) return;
 
-    setSearch({ state: "searching", results: [], error: "" });
+    setSearch({ state: "searching", answer: "", sources: [], error: "" });
 
     const params = new URLSearchParams({ question, top_k: String(topK) });
     try {
@@ -74,9 +74,14 @@ export default function App() {
       const result = await readJson(response);
       if (!response.ok) throw new Error(readError(result, response));
 
-      setSearch({ state: "done", results: result.payload.results, error: "" });
+      setSearch({
+        state: "done",
+        answer: result.payload.answer ?? "",
+        sources: result.payload.sources ?? [],
+        error: "",
+      });
     } catch (error) {
-      setSearch({ state: "error", results: [], error: error.message });
+      setSearch({ state: "error", answer: "", sources: [], error: error.message });
     }
   }
 
@@ -126,19 +131,24 @@ export default function App() {
             />
           </label>
           <button type="submit" disabled={search.state === "searching" || !question.trim()}>
-            {search.state === "searching" ? "Searching..." : "Search"}
+            {search.state === "searching" ? "Asking..." : "Ask"}
           </button>
         </form>
         {search.state === "error" && <p className="error">{search.error}</p>}
-        {search.results.length > 0 && (
-          <ol className="results">
-            {search.results.map((result, index) => (
-              <li key={index}>
-                <p className="chunk">{result.chunk}</p>
-                <span className="distance">distance {result.distance.toFixed(3)}</span>
-              </li>
-            ))}
-          </ol>
+        {search.state === "done" && (
+          <>
+            <p className="answer">{search.answer}</p>
+            <h3>Sources</h3>
+            <ol className="results">
+              {search.sources.map((source, index) => (
+                <li key={index}>
+                  <span className="filename">{source.file}</span>
+                  <p className="chunk">{source.text}</p>
+                  <span className="distance">distance {source.distance.toFixed(3)}</span>
+                </li>
+              ))}
+            </ol>
+          </>
         )}
       </section>
     </main>

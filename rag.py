@@ -1,8 +1,20 @@
-"""Chunking and stored-chunk helpers for guidely.
+"""Chunking, answer drafting and stored-chunk helpers for guidely.
 
-Split out of main.py so the chunking rules live in one readable place rather than
-in the middle of the request handling.
+Split out of main.py so the pipeline rules read in one place rather than in the
+middle of the request handling:
+
+    build_chunks      slice text the way the embedding model reads it
+    answer_question   turn retrieved chunks into an answer plus its sources
+    as_record         normalise a stored chunk
+
+None of these touch FastAPI. ValueError means the caller can turn it into a
+clear 4xx; OpenAI's own errors are left alone so the route can tell a missing
+key from a timeout.
 """
+
+import os
+
+from openai import OpenAI
 
 CHUNK_TOKENS = 700
 CHUNK_OVERLAP_TOKENS = 100
@@ -10,6 +22,15 @@ CHUNK_OVERLAP_TOKENS = 100
 # A trailing chunk shorter than this is folded into the one before it, because a
 # handful of tokens on its own embeds into noise.
 MIN_CHUNK_TOKENS = 60
+
+ANSWER_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+TIMEOUT_SECONDS = 30
+
+PROMPT = (
+    "You answer questions about a set of documents. Use only the numbered sources "
+    "below. If they do not contain the answer, say so plainly instead of guessing. "
+    "Keep it to a short paragraph and quote the wording you relied on."
+)
 
 
 def build_chunks(text, tokenizer, chunk_tokens=CHUNK_TOKENS, overlap=CHUNK_OVERLAP_TOKENS):
@@ -48,3 +69,44 @@ def as_record(chunk):
     if isinstance(chunk, dict):
         return {"file": chunk.get("file", "unknown"), "text": chunk["text"]}
     return {"file": "unknown", "text": chunk}
+
+
+def answer_question(question, sources):
+    """Ask an LLM to answer question from the retrieved sources.
+
+    `sources` is a list of {"file", "text"} records. Returns {"answer", "sources"},
+    where the sources are the same records that were sent to the model, so the
+    caller can show the answer next to the text it came from.
+    """
+    if not sources:
+        return {
+            "answer": "Nothing in the indexed documents covers that question.",
+            "sources": [],
+        }
+
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY is not set")
+
+    context = "\n\n".join(
+        f"[{number}] file: {source['file']}\n{source['text']}"
+        for number, source in enumerate(sources, start=1)
+    )
+
+    client = OpenAI(api_key=api_key, timeout=TIMEOUT_SECONDS)
+    response = client.chat.completions.create(
+        model=ANSWER_MODEL,
+        temperature=0,
+        messages=[
+            {"role": "system", "content": PROMPT},
+            {
+                "role": "user",
+                "content": f"Sources:\n{context}\n\nQuestion: {question}",
+            },
+        ],
+    )
+
+    return {
+        "answer": (response.choices[0].message.content or "").strip(),
+        "sources": sources,
+    }
