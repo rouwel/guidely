@@ -11,6 +11,8 @@ from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 from sentence_transformers import SentenceTransformer
 
+from rag import build_chunks
+
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
@@ -43,30 +45,19 @@ def home():
     return {"message": "Hello World"}
 
 
-# FIX: renamed from create_Chunks to snake_case, matching every other function.
-# FIX: `chunk.append(chunks)` had the receiver and the target swapped. It raised
-# AttributeError ('str' object has no attribute 'append') and left `chunks` empty,
-# so every embedding so far was built from zero documents.
-def create_chunks(doc: str, chunk_size: int) -> list[str]:
-    chunks = []
-    i = 0
-    while i < len(doc):
-        chunks.append(doc[i : i + chunk_size])
-        i += chunk_size
-    return chunks
 
 
 # FIX: renamed from Create_Embeddings (PascalCase is for classes, not functions).
 # FIX: the parameter is now `document` (str) instead of `contents`, so it no longer
 # collides with the `contents` bytes variable in upload_document - passing the bytes
-# to create_chunks was the easy mistake this naming invited.
+# to the chunker was the easy mistake this naming invited.
 def create_embeddings(document: str) -> int:
     # FIX: raise ValueError here, where the caller can report it, instead of failing
     # later on embeddings.shape[1] with an IndexError the caller never catches.
     if not document.strip():
         raise ValueError("The uploaded document is empty")
 
-    chunks = create_chunks(document, 100)
+    chunks = build_chunks(document, model_im_using.tokenizer)
 
     # Generate embeddings from chunks, as float32 for FAISS
     embeddings = model_im_using.encode(chunks).astype("float32")
