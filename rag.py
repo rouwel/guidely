@@ -1,4 +1,4 @@
-"""Token-aware chunking for guidely.
+"""Chunking and stored-chunk helpers for guidely.
 
 Split out of main.py so the chunking rules live in one readable place rather than
 in the middle of the request handling.
@@ -37,3 +37,14 @@ def build_chunks(text, tokenizer, chunk_tokens=CHUNK_TOKENS, overlap=CHUNK_OVERL
         chunks.pop()
 
     return chunks
+
+
+def as_record(chunk):
+    """Normalise a stored chunk to {"file", "text"}.
+
+    Older indexes hold bare strings, so an index written before filenames were
+    kept still searches instead of raising.
+    """
+    if isinstance(chunk, dict):
+        return {"file": chunk.get("file", "unknown"), "text": chunk["text"]}
+    return {"file": "unknown", "text": chunk}

@@ -11,7 +11,7 @@ from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 from sentence_transformers import SentenceTransformer
 
-from rag import build_chunks
+from rag import as_record, build_chunks
 
 logger = logging.getLogger(__name__)
 
@@ -51,13 +51,17 @@ def home():
 # FIX: the parameter is now `document` (str) instead of `contents`, so it no longer
 # collides with the `contents` bytes variable in upload_document - passing the bytes
 # to the chunker was the easy mistake this naming invited.
-def create_embeddings(document: str) -> int:
+def create_embeddings(document: str, filename: str) -> int:
     # FIX: raise ValueError here, where the caller can report it, instead of failing
     # later on embeddings.shape[1] with an IndexError the caller never catches.
     if not document.strip():
         raise ValueError("The uploaded document is empty")
 
     chunks = build_chunks(document, model_im_using.tokenizer)
+
+    # Store the file name beside every chunk, so a retrieved chunk can say where it
+    # came from. Bare strings cannot be cited back to a document.
+    records = [{"file": filename, "text": chunk} for chunk in chunks]
 
     # Generate embeddings from chunks, as float32 for FAISS
     embeddings = model_im_using.encode(chunks).astype("float32")
@@ -80,12 +84,12 @@ def create_embeddings(document: str) -> int:
 
     faiss.write_index(faiss_index, str(temp_index))
     with open(temp_chunks, "w", encoding="utf-8") as chunks_file:
-        json.dump(chunks, chunks_file, ensure_ascii=False, indent=2)
+        json.dump(records, chunks_file, ensure_ascii=False, indent=2)
 
     temp_index.replace(INDEX_PATH)
     temp_chunks.replace(CHUNKS_PATH)
 
-    return len(chunks)
+    return len(records)
 
 
 # FIX: PDFs are binary, so contents.decode("utf-8") could never work for them. Text
@@ -140,7 +144,7 @@ async def upload_document(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail=str(error)) from error
 
     try:
-        number_of_chunks = create_embeddings(document)
+        number_of_chunks = create_embeddings(document, file.filename)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
@@ -159,8 +163,8 @@ def search(question: str, top_k: int = 2):
     try:
         index = faiss.read_index(str(INDEX_PATH))
         with open(CHUNKS_PATH, "r", encoding="utf-8") as chunks_file:
-            # Same name as in create_embeddings, for the same payload.
-            chunks = json.load(chunks_file)
+            # Records are {"file", "text"} now; as_record keeps older indexes working.
+            chunks = [as_record(chunk) for chunk in json.load(chunks_file)]
     except (FileNotFoundError, RuntimeError):
         # FIX: a missing index is a RuntimeError from the FAISS C++ layer, not a
         # FileNotFoundError, so the old handler never fired and a missing index
@@ -196,7 +200,11 @@ def search(question: str, top_k: int = 2):
             continue
 
         results.append(
-            {"chunk": chunks[index_position], "distance": float(distance)}
+            {
+                "file": chunks[index_position]["file"],
+                "chunk": chunks[index_position]["text"],
+                "distance": float(distance),
+            }
         )
 
     return {"question": question, "results": results}

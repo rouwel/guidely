@@ -27,6 +27,7 @@ ignore = ["B008"]
 dev = [
     "faiss-cpu>=1.15.1",
     "fastapi>=0.141.1",
+    "openai>=3.24.0",
     "pypdf>=6.19.0",
     "python-multipart>=0.0.32",
     "sentence-transformers>=6.1.0",
