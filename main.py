@@ -7,7 +7,7 @@ from pathlib import Path
 import faiss
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse
-from openai import APITimeoutError
+from openai import APIStatusError, APITimeoutError
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 from sentence_transformers import SentenceTransformer
@@ -213,6 +213,13 @@ def search(question: str = Query(..., min_length=1), top_k: int = Query(2, ge=1,
     except APITimeoutError as error:
         raise HTTPException(
             status_code=504, detail="The language model timed out, try again"
+        ) from error
+    except APIStatusError as error:
+        # Bad key or an empty credit balance both arrive as a status error. Report
+        # the code the provider sent instead of letting it surface as a bare 500.
+        raise HTTPException(
+            status_code=502,
+            detail=f"The language model rejected the request (HTTP {error.status_code})",
         ) from error
 
     return {"question": question, "answer": answered["answer"], "sources": answered["sources"]}

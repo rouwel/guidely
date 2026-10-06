@@ -8,8 +8,11 @@ middle of the request handling:
     as_record         normalise a stored chunk
 
 None of these touch FastAPI. ValueError means the caller can turn it into a
-clear 4xx; OpenAI's own errors are left alone so the route can tell a missing
-key from a timeout.
+clear 503; the provider's own errors are left alone so the route can tell a
+missing key from a timeout from a rejected request.
+
+Answers come from xAI's API, which speaks the OpenAI wire format, so the same
+openai client works - only the base URL and the key differ.
 """
 
 import os
@@ -23,7 +26,10 @@ CHUNK_OVERLAP_TOKENS = 100
 # handful of tokens on its own embeds into noise.
 MIN_CHUNK_TOKENS = 60
 
-ANSWER_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+# xAI's cheapest text model, and still well past what a paragraph of retrieved
+# context needs. Override with XAI_MODEL to pick any other model on the account.
+ANSWER_MODEL = os.getenv("XAI_MODEL", "grok-4.3")
+BASE_URL = "https://api.x.ai/v1"
 TIMEOUT_SECONDS = 30
 
 PROMPT = (
@@ -84,16 +90,16 @@ def answer_question(question, sources):
             "sources": [],
         }
 
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv("XAI_API_KEY")
     if not api_key:
-        raise ValueError("OPENAI_API_KEY is not set")
+        raise ValueError("XAI_API_KEY is not set - create one at console.x.ai")
 
     context = "\n\n".join(
         f"[{number}] file: {source['file']}\n{source['text']}"
         for number, source in enumerate(sources, start=1)
     )
 
-    client = OpenAI(api_key=api_key, timeout=TIMEOUT_SECONDS)
+    client = OpenAI(api_key=api_key, base_url=BASE_URL, timeout=TIMEOUT_SECONDS)
     response = client.chat.completions.create(
         model=ANSWER_MODEL,
         temperature=0,
