@@ -5,12 +5,17 @@ import logging
 from pathlib import Path
 
 import faiss
+from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse
 from openai import APIStatusError, APITimeoutError
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 from sentence_transformers import SentenceTransformer
+
+# Load the API key from .env into the process before anything reads it, so the
+# server works the moment it starts instead of erroring on a missing key.
+load_dotenv()
 
 from rag import answer_question, as_record, build_chunks
 
@@ -215,6 +220,13 @@ def search(question: str = Query(..., min_length=1), top_k: int = Query(2, ge=1,
             status_code=504, detail="The language model timed out, try again"
         ) from error
     except APIStatusError as error:
+        if error.status_code == 429:
+            # The free tier throttles hard. Tell the user it is a quota reset, not
+            # a bug, so they wait a minute instead of replaying the search.
+            raise HTTPException(
+                status_code=503,
+                detail="The free model is rate-limited, wait a minute and try again",
+            ) from error
         # Bad key or an empty credit balance both arrive as a status error. Report
         # the code the provider sent instead of letting it surface as a bare 500.
         raise HTTPException(

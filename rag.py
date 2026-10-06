@@ -11,11 +11,14 @@ None of these touch FastAPI. ValueError means the caller can turn it into a
 clear 503; the provider's own errors are left alone so the route can tell a
 missing key from a timeout from a rejected request.
 
-Answers come from xAI's API, which speaks the OpenAI wire format, so the same
-openai client works - only the base URL and the key differ.
+The provider defaults to Groq, which speaks the OpenAI wire format, so the same
+openai client works - only the base URL and the key differ. Every setting is
+overridable through the environment (LLM_BASE_URL, LLM_API_KEY, LLM_MODEL), so a
+different account or model never needs a code change.
 """
 
 import os
+import re
 
 from openai import OpenAI
 
@@ -26,16 +29,17 @@ CHUNK_OVERLAP_TOKENS = 100
 # handful of tokens on its own embeds into noise.
 MIN_CHUNK_TOKENS = 60
 
-# xAI's cheapest text model, and still well past what a paragraph of retrieved
-# context needs. Override with XAI_MODEL to pick any other model on the account.
-ANSWER_MODEL = os.getenv("XAI_MODEL", "grok-4.3")
-BASE_URL = "https://api.x.ai/v1"
+# Groq's free tier: an emergency-rescue 120B model, no card needed, roughly a
+# thousand questions a day. Override any of these with the matching env var.
+ANSWER_MODEL = os.getenv("LLM_MODEL", "openai/gpt-oss-120b")
+BASE_URL = os.getenv("LLM_BASE_URL", "https://api.groq.com/openai/v1")
 TIMEOUT_SECONDS = 30
 
 PROMPT = (
     "You answer questions about a set of documents. Use only the numbered sources "
     "below. If they do not contain the answer, say so plainly instead of guessing. "
-    "Keep it to a short paragraph and quote the wording you relied on."
+    "Keep it to a short paragraph and quote the wording you relied on. Do not add "
+    "any citations, page numbers or reference markers to your answer."
 )
 
 
@@ -90,9 +94,9 @@ def answer_question(question, sources):
             "sources": [],
         }
 
-    api_key = os.getenv("XAI_API_KEY")
+    api_key = os.getenv("LLM_API_KEY")
     if not api_key:
-        raise ValueError("XAI_API_KEY is not set - create one at console.x.ai")
+        raise ValueError("LLM_API_KEY is not set - export it or add it to .env")
 
     context = "\n\n".join(
         f"[{number}] file: {source['file']}\n{source['text']}"
@@ -112,7 +116,10 @@ def answer_question(question, sources):
         ],
     )
 
-    return {
-        "answer": (response.choices[0].message.content or "").strip(),
-        "sources": sources,
-    }
+    answer = (response.choices[0].message.content or "").strip()
+    # Some providers bolt automatic citation markers on to answers that came from
+    # retrieved text. The sources are already shown next to the answer, so the
+    # markers are only noise in the UI.
+    answer = re.sub(r"\uff0c?\u3010[^\u3011]*\u3011|\u3010[^\u3011]*\u3011", "", answer).strip()
+
+    return {"answer": answer, "sources": sources}
