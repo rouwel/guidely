@@ -22,7 +22,9 @@ import re
 
 from openai import OpenAI
 
-CHUNK_TOKENS = 700
+# 500 tokens sits inside both the brief's 500-1000 range and the embedding
+# model's 512-token window, so every word of a chunk is embedded - see main.py.
+CHUNK_TOKENS = 500
 CHUNK_OVERLAP_TOKENS = 100
 
 # A trailing chunk shorter than this is folded into the one before it, because a

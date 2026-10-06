@@ -38,7 +38,10 @@ async def unhandled_error(request, error):
 # FIX: stays at module scope on purpose - create_embeddings and search both need it.
 # (It was previously local to create_embeddings, which made search raise NameError.)
 # Note: this loads the model at import time, so every worker start pays the cost.
-model_im_using = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+# all-MiniLM-L6-v2 truncates at 256 tokens, so most of a 700-token chunk was
+# never embedded. bge-small-en-v1.5 reads 512 tokens, and chunks are now 500,
+# keeping the whole chunk inside the model's window.
+model_im_using = SentenceTransformer("BAAI/bge-small-en-v1.5")
 
 # FIX: the writer (create_embeddings) and the reader (search) previously hard-coded
 # these paths separately, so they could drift apart. One constant, used by both.
