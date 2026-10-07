@@ -1,5 +1,13 @@
 __pycache__/
 *.pyc
-chunks.index
-chunks.json
+
+# secrets - never commit the API key
 .env
+
+# runtime state written by the backend (index + chunk records + manifest)
+backend/data/*.index
+backend/data/*.json
+backend/logs/
+
+# test and build artifacts
+.pytest_cache/
