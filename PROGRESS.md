@@ -106,10 +106,3 @@ uv run python -m backend.evaluate      # offline eval, real model + LLM (slow fi
 uv run uvicorn backend.main:app --reload   # API on :8000
 cd frontend && npm run dev             # UI on :5173 (proxies /upload/documents, /search)
 ```
-
-## Credential & environment notes
-
-- `LLM_API_KEY` lives in `.env` (gitignored). **Rotate it if it ever appears in chat/logs.**
-- `Rouwel_Mwangu_CV_updated (1).pdf` is untracked and must never be committed.
-- This machine: ~7GB RAM, slow disk → torch import ≈ minutes. Model weights are cached on disk now.
-- Free-tier Groq throttles at ~1000 req/day; the API maps 429→503 so clients get told to wait.
