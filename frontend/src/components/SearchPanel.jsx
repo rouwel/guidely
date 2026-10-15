@@ -3,7 +3,7 @@ import ResultsList from "./ResultsList";
 export default function SearchPanel({ search, question, topK, onQuestion, onTopK, onSubmit }) {
   return (
     <section>
-      <h2>2. Ask a question</h2>
+      <h2>Ask a question</h2>
       <form onSubmit={onSubmit}>
         <input
           type="text"

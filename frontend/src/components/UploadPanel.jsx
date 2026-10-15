@@ -1,7 +1,7 @@
 export default function UploadPanel({ file, upload, onFile, onSubmit }) {
   return (
     <section>
-      <h2>1. Upload a document</h2>
+      <h2>Upload a document</h2>
       <form onSubmit={onSubmit}>
         <input
           type="file"

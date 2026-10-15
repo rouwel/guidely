@@ -1,40 +1,11 @@
 import { useState } from "react";
 import SearchPanel from "../components/SearchPanel";
-import UploadPanel from "../components/UploadPanel";
 import { readError, readJson } from "../lib/api";
 
-export default function HomePage() {
-  const [file, setFile] = useState(null);
-  const [upload, setUpload] = useState({ state: "idle", message: "", chunks: null });
-
+export default function HomePage({ onNavigateAdmin }) {
   const [question, setQuestion] = useState("");
   const [topK, setTopK] = useState(3);
   const [search, setSearch] = useState({ state: "idle", answer: "", sources: [], error: "" });
-
-  async function handleUpload(event) {
-    event.preventDefault();
-    if (!file) return;
-
-    setUpload({ state: "uploading", message: "", chunks: null });
-    setSearch({ state: "idle", answer: "", sources: [], error: "" });
-
-    const body = new FormData();
-    body.append("file", file);
-
-    try {
-      const response = await fetch("/upload/documents", { method: "POST", body });
-      const result = await readJson(response);
-      if (!response.ok) throw new Error(readError(result, response));
-
-      setUpload({
-        state: "done",
-        message: result.payload.message,
-        chunks: result.payload.chunks_stored,
-      });
-    } catch (error) {
-      setUpload({ state: "error", message: error.message, chunks: null });
-    }
-  }
 
   async function handleSearch(event) {
     event.preventDefault();
@@ -61,9 +32,15 @@ export default function HomePage() {
 
   return (
     <main>
-      <h1>Guidely</h1>
-      <p className="tagline">Ask questions about a game's text.</p>
-      <UploadPanel file={file} upload={upload} onFile={setFile} onSubmit={handleUpload} />
+      <header className="topbar">
+        <div>
+          <h1>Guidely</h1>
+          <p className="tagline">Ask questions about a game's text.</p>
+        </div>
+        <button type="button" className="secondary" onClick={onNavigateAdmin}>
+          Add documents
+        </button>
+      </header>
       <SearchPanel
         search={search}
         question={question}

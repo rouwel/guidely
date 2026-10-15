@@ -27,6 +27,24 @@ h1 {
   color: #8b8f96;
 }
 
+.topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+button.secondary {
+  background: transparent;
+  border: 1px solid #2f343c;
+  color: #c7cbd1;
+  white-space: nowrap;
+}
+
+button.secondary:hover {
+  background: #1c1f25;
+}
+
 section {
   margin-top: 2rem;
   padding-top: 1.25rem;

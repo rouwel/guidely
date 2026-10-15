@@ -129,7 +129,7 @@ backend/
   evaluate.py        offline evaluation script
 frontend/
   src/components/    UploadPanel, SearchPanel, ResultsList
-  src/pages/         HomePage
+  src/pages/         HomePage (search), AdminPage (upload + reindex)
   src/lib/api.js     response/error helpers
 ```
 
