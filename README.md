@@ -136,3 +136,6 @@ frontend/
 Runtime state (`chunks.index`, `chunks.json`, `documents.json`) and API key/env files are
 gitignored; `backend/logs/` holds the app log plus `queries.csv` and `failures.csv` for a durable
 failure-handling record.
+
+
+_______________________________________________________________________________________________________________________
